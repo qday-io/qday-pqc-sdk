@@ -220,6 +220,8 @@ Uses `ghcr.io/qday-io/qday-pqc-server:main`. Compose bind-mounts host files into
 
    Do **not** pre-create empty `secret.key` / `public.key` files. If both files are absent, the process generates a key pair on first start and writes `data/secret.key` and `data/public.key`. If both already exist, they are loaded. Key files are gitignored.
 
+   Compose starts as root so the bind-mounted `./data` is writable. The image entrypoint then chowns `/data` and drops to the unprivileged service user `app` (uid 65532).
+
 3. Pull access to GHCR if the image is private (`docker login ghcr.io`).
 
 ### Start

@@ -2,6 +2,7 @@ services:
   qday-pqc-server:
     container_name: qday-pqc-server
     image: ghcr.io/qday-io/qday-pqc-server:main
+    user: "0:0"
     ports:
       - "8080:8080"
     environment:

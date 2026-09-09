@@ -49,16 +49,20 @@ RUN set -eux; \
       sed -i 's|deb.debian.org|mirrors.aliyun.com|g; s|security.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list; \
     fi; \
     apt-get update; \
-    apt-get install -y --no-install-recommends -o Acquire::Retries=8 curl libssl3; \
+    apt-get install -y --no-install-recommends -o Acquire::Retries=8 curl libssl3 gosu; \
     rm -rf /var/lib/apt/lists/*; \
     echo /usr/local/lib > /etc/ld.so.conf.d/liboqs.conf; \
-    useradd --system --home-dir /data --create-home pqc
+    groupadd --system --gid 65532 app; \
+    useradd --system --uid 65532 --gid 65532 --home-dir /data --create-home app; \
+    chmod 0750 /data
 
 COPY --from=builder /usr/local/lib/liboqs.so* /usr/local/lib/
 RUN ldconfig
 
 COPY --from=builder /out/qday-pqc-server /usr/local/bin/qday-pqc-server
 COPY configs/docker.yaml /etc/qday-pqc-server/config.yaml
+COPY scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod 0755 /usr/local/bin/docker-entrypoint.sh /usr/local/bin/qday-pqc-server
 
 ENV PQC_CONFIG=/etc/qday-pqc-server/config.yaml \
     PQC_HTTP_ADDR=:8080 \
@@ -67,11 +71,10 @@ ENV PQC_CONFIG=/etc/qday-pqc-server/config.yaml \
     LD_LIBRARY_PATH=/usr/local/lib
 
 WORKDIR /data
-USER pqc
 EXPOSE 8080
 
 HEALTHCHECK --interval=15s --timeout=3s --start-period=10s --retries=3 \
     CMD curl -fsS http://127.0.0.1:8080/health >/dev/null
 
-ENTRYPOINT ["/usr/local/bin/qday-pqc-server"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["-config", "/etc/qday-pqc-server/config.yaml"]
