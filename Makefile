@@ -10,7 +10,7 @@ export MACOSX_DEPLOYMENT_TARGET
 export CGO_CFLAGS
 export CGO_LDFLAGS
 
-.PHONY: run test build tidy docker-build docker-run docker-up
+.PHONY: run test build tidy docker-build docker-run docker-up verify
 
 run:
 	go run ./cmd
@@ -32,3 +32,6 @@ docker-run:
 
 docker-up:
 	docker compose up -d
+
+verify:
+	./scripts/verify-api.sh
