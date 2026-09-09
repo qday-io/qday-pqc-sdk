@@ -1,0 +1,7 @@
+http_addr: ":8080"
+algorithm: ML-DSA-65
+log_level: info
+# Leave empty to generate an in-memory key pair at startup.
+# Set both to persist keys across restarts.
+secret_key_file: ""
+public_key_file: ""

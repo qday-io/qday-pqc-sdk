@@ -1,0 +1,17 @@
+services:
+  qday-pqc-server:
+    build: .
+    image: qday-pqc-server:local
+    ports:
+      - "8080:8080"
+    environment:
+      PQC_HTTP_ADDR: ":8080"
+      PQC_ALGORITHM: ML-DSA-65
+      PQC_LOG_LEVEL: info
+      PQC_SECRET_KEY_FILE: /data/secret.key
+      PQC_PUBLIC_KEY_FILE: /data/public.key
+    volumes:
+      - qday-pqc-server-keys:/data
+
+volumes:
+  qday-pqc-server-keys:

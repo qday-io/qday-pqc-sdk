@@ -1,0 +1,5 @@
+http_addr: ":8080"
+algorithm: ML-DSA-65
+log_level: info
+secret_key_file: /data/secret.key
+public_key_file: /data/public.key
