@@ -1,7 +1,7 @@
 services:
   qday-pqc-server:
-    build: .
-    image: qday-pqc-server:local
+    container_name: qday-pqc-server
+    image: ghcr.io/qday-io/qday-pqc-server:main
     ports:
       - "8080:8080"
     environment:
@@ -12,6 +12,13 @@ services:
       PQC_PUBLIC_KEY_FILE: /data/public.key
     volumes:
       - qday-pqc-server-keys:/data
+    networks:
+      - qday-pqc-server
 
 volumes:
   qday-pqc-server-keys:
+
+networks:
+  qday-pqc-server:
+    name: qday-pqc-server
+    driver: bridge
