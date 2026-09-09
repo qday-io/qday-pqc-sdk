@@ -5,18 +5,17 @@ services:
     ports:
       - "8080:8080"
     environment:
-      PQC_HTTP_ADDR: ":8080"
-      PQC_ALGORITHM: ML-DSA-65
-      PQC_LOG_LEVEL: info
-      PQC_SECRET_KEY_FILE: /data/secret.key
-      PQC_PUBLIC_KEY_FILE: /data/public.key
+      # Image ENV would otherwise override the mounted YAML (empty = do not override).
+      PQC_HTTP_ADDR: ""
+      PQC_ALGORITHM: ""
+      PQC_LOG_LEVEL: ""
+      PQC_SECRET_KEY_FILE: ""
+      PQC_PUBLIC_KEY_FILE: ""
     volumes:
-      - qday-pqc-server-keys:/data
+      - ./configs/config.yaml:/etc/qday-pqc-server/config.yaml:ro
+      - ./data:/data
     networks:
       - qday-pqc-server
-
-volumes:
-  qday-pqc-server-keys:
 
 networks:
   qday-pqc-server:

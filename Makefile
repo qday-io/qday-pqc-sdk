@@ -13,13 +13,13 @@ export CGO_LDFLAGS
 .PHONY: run test build tidy docker-build docker-run docker-up
 
 run:
-	go run .
+	go run ./cmd
 
 test:
 	go test -v ./...
 
 build:
-	go build -o qday-pqc-server .
+	go build -o bin/qday-pqc-server ./cmd
 
 tidy:
 	go mod tidy
@@ -31,4 +31,4 @@ docker-run:
 	docker run --rm -p 8080:8080 --name qday-pqc-server qday-pqc-server:local
 
 docker-up:
-	docker compose up --build
+	docker compose up -d

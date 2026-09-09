@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"bytes"
@@ -7,14 +7,16 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/qday-io/qday-pqc-server/internal/signer"
 )
 
 func TestAPISignVerify(t *testing.T) {
-	signer, err := GenerateSigner("ML-DSA-65")
+	s, err := signer.Generate("ML-DSA-65")
 	if err != nil {
 		t.Fatal(err)
 	}
-	ts := httptest.NewServer(NewServer(signer))
+	ts := httptest.NewServer(New(s))
 	t.Cleanup(ts.Close)
 
 	res, err := http.Get(ts.URL + "/health")
@@ -81,11 +83,11 @@ func TestAPISignVerify(t *testing.T) {
 }
 
 func TestAPISignBinaryMessage(t *testing.T) {
-	signer, err := GenerateSigner("ML-DSA-65")
+	s, err := signer.Generate("ML-DSA-65")
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv := httptest.NewServer(NewServer(signer))
+	srv := httptest.NewServer(New(s))
 	t.Cleanup(srv.Close)
 
 	raw := []byte{0x00, 0x01, 0xff}
@@ -101,14 +103,82 @@ func TestAPISignBinaryMessage(t *testing.T) {
 }
 
 func TestAPISignRequiresMessage(t *testing.T) {
-	signer, err := GenerateSigner("ML-DSA-65")
+	s, err := signer.Generate("ML-DSA-65")
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv := httptest.NewServer(NewServer(signer))
+	srv := httptest.NewServer(New(s))
 	t.Cleanup(srv.Close)
 
 	res, err := http.Post(srv.URL+"/v1/sign", "application/json", bytes.NewReader([]byte(`{}`)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", res.StatusCode)
+	}
+}
+
+func TestAPIVerifyAcceptsURLSafeAndWrappedBase64(t *testing.T) {
+	s, err := signer.Generate("ML-DSA-65")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(New(s))
+	t.Cleanup(srv.Close)
+
+	signBody, _ := json.Marshal(signRequest{Message: "hello pqc"})
+	res, err := http.Post(srv.URL+"/v1/sign", "application/json", bytes.NewReader(signBody))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	var signed signResponse
+	if err := json.NewDecoder(res.Body).Decode(&signed); err != nil {
+		t.Fatal(err)
+	}
+
+	pubRaw, err := base64.StdEncoding.DecodeString(signed.PublicKeyB64)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	wrappedSig := signed.SignatureB64[:8] + "\n" + signed.SignatureB64[8:]
+	urlPub := base64.URLEncoding.EncodeToString(pubRaw)
+
+	body, _ := json.Marshal(verifyRequest{
+		Message:      "hello pqc",
+		SignatureB64: wrappedSig,
+		PublicKeyB64: urlPub,
+	})
+	res, err = http.Post(srv.URL+"/v1/verify", "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	var verified verifyResponse
+	if err := json.NewDecoder(res.Body).Decode(&verified); err != nil {
+		t.Fatal(err)
+	}
+	if res.StatusCode != http.StatusOK || !verified.Valid {
+		t.Fatalf("status=%d valid=%v", res.StatusCode, verified.Valid)
+	}
+}
+
+func TestAPIRejectsInvalidBase64(t *testing.T) {
+	s, err := signer.Generate("ML-DSA-65")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(New(s))
+	t.Cleanup(srv.Close)
+
+	body, _ := json.Marshal(verifyRequest{
+		Message:      "hello pqc",
+		SignatureB64: "not-valid-base64!!!",
+	})
+	res, err := http.Post(srv.URL+"/v1/verify", "application/json", bytes.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
 	}

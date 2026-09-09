@@ -1,4 +1,4 @@
-module github.com/vikesun/qday-pqc-server
+module github.com/qday-io/qday-pqc-server
 
 go 1.23.0
 

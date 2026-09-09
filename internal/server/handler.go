@@ -1,7 +1,6 @@
-package main
+package server
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
@@ -11,12 +10,14 @@ import (
 	"time"
 
 	"github.com/open-quantum-safe/liboqs-go/oqs"
+
+	"github.com/qday-io/qday-pqc-server/internal/signer"
 )
 
 const maxBodyBytes = 1 << 20
 
 type Server struct {
-	signer *Signer
+	signer *signer.Signer
 	mux    http.Handler
 }
 
@@ -54,15 +55,15 @@ type infoResponse struct {
 	Details       oqs.SignatureDetails `json:"details"`
 }
 
-func NewServer(signer *Signer) *Server {
-	s := &Server{signer: signer}
+func New(s *signer.Signer) *Server {
+	h := &Server{signer: s}
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /health", s.handleHealth)
-	mux.HandleFunc("GET /v1/info", s.handleInfo)
-	mux.HandleFunc("POST /v1/sign", s.handleSign)
-	mux.HandleFunc("POST /v1/verify", s.handleVerify)
-	s.mux = withLogging(mux)
-	return s
+	mux.HandleFunc("GET /health", h.handleHealth)
+	mux.HandleFunc("GET /v1/info", h.handleInfo)
+	mux.HandleFunc("POST /v1/sign", h.handleSign)
+	mux.HandleFunc("POST /v1/verify", h.handleVerify)
+	h.mux = withLogging(mux)
+	return h
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -77,7 +78,7 @@ func (s *Server) handleInfo(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, infoResponse{
 		LiboqsVersion: oqs.LiboqsVersion(),
 		Algorithm:     s.signer.Algorithm(),
-		PublicKeyB64:  base64.StdEncoding.EncodeToString(s.signer.PublicKey()),
+		PublicKeyB64:  encodeBase64(s.signer.PublicKey()),
 		Details:       s.signer.Details(),
 	})
 }
@@ -103,8 +104,8 @@ func (s *Server) handleSign(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, signResponse{
 		Algorithm:    s.signer.Algorithm(),
-		SignatureB64: base64.StdEncoding.EncodeToString(sig),
-		PublicKeyB64: base64.StdEncoding.EncodeToString(s.signer.PublicKey()),
+		SignatureB64: encodeBase64(sig),
+		PublicKeyB64: encodeBase64(s.signer.PublicKey()),
 	})
 }
 
@@ -120,22 +121,17 @@ func (s *Server) handleVerify(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	if strings.TrimSpace(req.SignatureB64) == "" {
-		writeError(w, http.StatusBadRequest, errors.New("signature_b64 is required"))
-		return
-	}
-
-	signature, err := base64.StdEncoding.DecodeString(req.SignatureB64)
+	signature, err := decodeBase64("signature_b64", req.SignatureB64)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, errors.New("invalid signature_b64"))
+		writeError(w, http.StatusBadRequest, err)
 		return
 	}
 
 	pubKey := s.signer.PublicKey()
 	if strings.TrimSpace(req.PublicKeyB64) != "" {
-		pubKey, err = base64.StdEncoding.DecodeString(req.PublicKeyB64)
+		pubKey, err = decodeBase64("public_key_b64", req.PublicKeyB64)
 		if err != nil {
-			writeError(w, http.StatusBadRequest, errors.New("invalid public_key_b64"))
+			writeError(w, http.StatusBadRequest, err)
 			return
 		}
 	}
@@ -145,34 +141,12 @@ func (s *Server) handleVerify(w http.ResponseWriter, r *http.Request) {
 		alg = req.Algorithm
 	}
 
-	ok, err := Verify(alg, msg, signature, pubKey)
+	ok, err := signer.Verify(alg, msg, signature, pubKey)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, verifyResponse{Valid: ok})
-}
-
-func decodeMessage(text, b64 string) ([]byte, error) {
-	hasText := text != ""
-	hasB64 := strings.TrimSpace(b64) != ""
-	switch {
-	case hasText && hasB64:
-		return nil, errors.New("provide either message or message_b64, not both")
-	case hasB64:
-		msg, err := base64.StdEncoding.DecodeString(b64)
-		if err != nil {
-			return nil, errors.New("invalid message_b64")
-		}
-		if len(msg) == 0 {
-			return nil, errors.New("message is required")
-		}
-		return msg, nil
-	case hasText:
-		return []byte(text), nil
-	default:
-		return nil, errors.New("message is required")
-	}
 }
 
 func decodeJSON(r *http.Request, dst any) error {

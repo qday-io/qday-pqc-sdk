@@ -36,7 +36,7 @@ COPY .config/liboqs-go.linux.pc .config/liboqs-go.pc
 ENV PKG_CONFIG_PATH=/src/.config
 
 RUN go test ./... \
-    && go build -o /out/qday-pqc-server .
+    && go build -o /out/qday-pqc-server ./cmd
 
 FROM golang:1.23.4 AS runtime
 
@@ -58,7 +58,7 @@ COPY --from=builder /usr/local/lib/liboqs.so* /usr/local/lib/
 RUN ldconfig
 
 COPY --from=builder /out/qday-pqc-server /usr/local/bin/qday-pqc-server
-COPY config.docker.yaml /etc/qday-pqc-server/config.yaml
+COPY configs/docker.yaml /etc/qday-pqc-server/config.yaml
 
 ENV PQC_CONFIG=/etc/qday-pqc-server/config.yaml \
     PQC_HTTP_ADDR=:8080 \

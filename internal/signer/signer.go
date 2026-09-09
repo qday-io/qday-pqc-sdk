@@ -1,4 +1,4 @@
-package main
+package signer
 
 import (
 	"bytes"
@@ -17,7 +17,7 @@ type Signer struct {
 	details   oqs.SignatureDetails
 }
 
-func GenerateSigner(alg string) (*Signer, error) {
+func Generate(alg string) (*Signer, error) {
 	sig := oqs.Signature{}
 	defer sig.Clean()
 
@@ -38,7 +38,7 @@ func GenerateSigner(alg string) (*Signer, error) {
 	}, nil
 }
 
-func NewSigner(alg string, secretKey, publicKey []byte) (*Signer, error) {
+func New(alg string, secretKey, publicKey []byte) (*Signer, error) {
 	sig := oqs.Signature{}
 	defer sig.Clean()
 
@@ -62,9 +62,9 @@ func NewSigner(alg string, secretKey, publicKey []byte) (*Signer, error) {
 	}, nil
 }
 
-func LoadOrGenerateSigner(cfg Config) (*Signer, error) {
-	sec := cfg.SecretKeyFile
-	pub := cfg.PublicKeyFile
+func LoadOrGenerate(algorithm, secretKeyFile, publicKeyFile string) (*Signer, error) {
+	sec := secretKeyFile
+	pub := publicKeyFile
 	if (sec == "") != (pub == "") {
 		return nil, fmt.Errorf("secret_key_file and public_key_file must be set together")
 	}
@@ -76,23 +76,23 @@ func LoadOrGenerateSigner(cfg Config) (*Signer, error) {
 			return nil, fmt.Errorf("key files incomplete: secret=%t public=%t", secExists, pubExists)
 		}
 		if secExists && pubExists {
-			return loadSignerFromFiles(cfg.Algorithm, sec, pub)
+			return loadFromFiles(algorithm, sec, pub)
 		}
 	}
 
-	signer, err := GenerateSigner(cfg.Algorithm)
+	s, err := Generate(algorithm)
 	if err != nil {
 		return nil, err
 	}
 	if sec != "" {
-		if err := signer.Save(sec, pub); err != nil {
+		if err := s.Save(sec, pub); err != nil {
 			return nil, err
 		}
 	}
-	return signer, nil
+	return s, nil
 }
 
-func loadSignerFromFiles(alg, secretPath, publicPath string) (*Signer, error) {
+func loadFromFiles(alg, secretPath, publicPath string) (*Signer, error) {
 	secretKey, err := os.ReadFile(secretPath)
 	if err != nil {
 		return nil, fmt.Errorf("read secret key: %w", err)
@@ -101,7 +101,7 @@ func loadSignerFromFiles(alg, secretPath, publicPath string) (*Signer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read public key: %w", err)
 	}
-	return NewSigner(alg, secretKey, publicKey)
+	return New(alg, secretKey, publicKey)
 }
 
 func (s *Signer) Save(secretPath, publicPath string) error {

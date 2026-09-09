@@ -1,0 +1,8 @@
+http_addr: ":8080"
+algorithm: ML-DSA-65
+log_level: info
+# Docker Compose bind-mounts ./data to /data.
+# Missing key files are generated on first start and written here.
+# For local `make run` without /data, leave both empty for an in-memory key pair.
+secret_key_file: /data/secret.key
+public_key_file: /data/public.key

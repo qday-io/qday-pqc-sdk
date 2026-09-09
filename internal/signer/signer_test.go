@@ -1,4 +1,4 @@
-package main
+package signer
 
 import (
 	"bytes"
@@ -8,16 +8,16 @@ import (
 )
 
 func TestSignTwiceStillVerifies(t *testing.T) {
-	signer, err := GenerateSigner("ML-DSA-65")
+	s, err := Generate("ML-DSA-65")
 	if err != nil {
 		t.Fatal(err)
 	}
 	for i, msg := range [][]byte{[]byte("first"), []byte("second")} {
-		sig, err := signer.Sign(msg)
+		sig, err := s.Sign(msg)
 		if err != nil {
 			t.Fatalf("sign %d: %v", i, err)
 		}
-		ok, err := Verify(signer.Algorithm(), msg, sig, signer.PublicKey())
+		ok, err := Verify(s.Algorithm(), msg, sig, s.PublicKey())
 		if err != nil {
 			t.Fatalf("verify %d: %v", i, err)
 		}
@@ -31,15 +31,15 @@ func TestSignVerify(t *testing.T) {
 	const alg = "ML-DSA-65"
 	msg := []byte("pqc sign/verify test")
 
-	signer, err := GenerateSigner(alg)
+	s, err := Generate(alg)
 	if err != nil {
-		t.Fatalf("GenerateSigner: %v", err)
+		t.Fatalf("Generate: %v", err)
 	}
-	if len(signer.PublicKey()) == 0 {
+	if len(s.PublicKey()) == 0 {
 		t.Fatal("expected non-empty public key")
 	}
 
-	sig, err := signer.Sign(msg)
+	sig, err := s.Sign(msg)
 	if err != nil {
 		t.Fatalf("Sign: %v", err)
 	}
@@ -47,7 +47,7 @@ func TestSignVerify(t *testing.T) {
 		t.Fatal("expected non-empty signature")
 	}
 
-	ok, err := Verify(alg, msg, sig, signer.PublicKey())
+	ok, err := Verify(alg, msg, sig, s.PublicKey())
 	if err != nil {
 		t.Fatalf("Verify: %v", err)
 	}
@@ -57,7 +57,7 @@ func TestSignVerify(t *testing.T) {
 
 	tampered := append([]byte(nil), msg...)
 	tampered[0] ^= 0x01
-	ok, err = Verify(alg, tampered, sig, signer.PublicKey())
+	ok, err = Verify(alg, tampered, sig, s.PublicKey())
 	if err != nil {
 		t.Fatalf("Verify tampered: %v", err)
 	}
@@ -66,15 +66,12 @@ func TestSignVerify(t *testing.T) {
 	}
 }
 
-func TestLoadOrGenerateSignerPersistsKeys(t *testing.T) {
+func TestLoadOrGeneratePersistsKeys(t *testing.T) {
 	dir := t.TempDir()
-	cfg := Config{
-		Algorithm:     "ML-DSA-65",
-		SecretKeyFile: filepath.Join(dir, "secret.key"),
-		PublicKeyFile: filepath.Join(dir, "public.key"),
-	}
+	secret := filepath.Join(dir, "secret.key")
+	pub := filepath.Join(dir, "public.key")
 
-	first, err := LoadOrGenerateSigner(cfg)
+	first, err := LoadOrGenerate("ML-DSA-65", secret, pub)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,14 +81,14 @@ func TestLoadOrGenerateSignerPersistsKeys(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	second, err := LoadOrGenerateSigner(cfg)
+	second, err := LoadOrGenerate("ML-DSA-65", secret, pub)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !bytes.Equal(first.PublicKey(), second.PublicKey()) {
 		t.Fatal("reloaded public key mismatch")
 	}
-	ok, err := Verify(cfg.Algorithm, msg, sig, second.PublicKey())
+	ok, err := Verify("ML-DSA-65", msg, sig, second.PublicKey())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,17 +97,14 @@ func TestLoadOrGenerateSignerPersistsKeys(t *testing.T) {
 	}
 }
 
-func TestLoadOrGenerateSignerIncompleteFiles(t *testing.T) {
+func TestLoadOrGenerateIncompleteFiles(t *testing.T) {
 	dir := t.TempDir()
-	cfg := Config{
-		Algorithm:     "ML-DSA-65",
-		SecretKeyFile: filepath.Join(dir, "secret.key"),
-		PublicKeyFile: filepath.Join(dir, "public.key"),
-	}
-	if err := os.WriteFile(cfg.SecretKeyFile, []byte("x"), 0o600); err != nil {
+	secret := filepath.Join(dir, "secret.key")
+	pub := filepath.Join(dir, "public.key")
+	if err := os.WriteFile(secret, []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := LoadOrGenerateSigner(cfg); err == nil {
+	if _, err := LoadOrGenerate("ML-DSA-65", secret, pub); err == nil {
 		t.Fatal("expected error for incomplete key files")
 	}
 }

@@ -7,11 +7,14 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
 	"github.com/open-quantum-safe/liboqs-go/oqs"
+
+	"github.com/qday-io/qday-pqc-server/internal/config"
+	"github.com/qday-io/qday-pqc-server/internal/server"
+	"github.com/qday-io/qday-pqc-server/internal/signer"
 )
 
 func main() {
@@ -22,29 +25,28 @@ func main() {
 }
 
 func run(args []string) error {
-	configPath, err := ParseFlags(args)
+	configPath, err := config.ParseFlags(args)
 	if err != nil {
 		return err
 	}
 
-	cfg, usedPath, err := LoadConfig(configPath)
+	cfg, usedPath, err := config.Load(configPath)
 	if err != nil {
 		return err
 	}
-	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: parseLogLevel(cfg.LogLevel)})))
-
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: cfg.SlogLevel()})))
 	if usedPath != "" {
 		slog.Info("loaded config file", "path", usedPath)
 	}
 
-	signer, err := LoadOrGenerateSigner(cfg)
+	s, err := signer.LoadOrGenerate(cfg.Algorithm, cfg.SecretKeyFile, cfg.PublicKeyFile)
 	if err != nil {
 		return err
 	}
 
-	srv := &http.Server{
+	httpServer := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           NewServer(signer),
+		Handler:           server.New(s),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
@@ -55,34 +57,21 @@ func run(args []string) error {
 	go func() {
 		slog.Info("qday-pqc-server listening",
 			"addr", cfg.HTTPAddr,
-			"algorithm", signer.Algorithm(),
+			"algorithm", s.Algorithm(),
 			"liboqs", oqs.LiboqsVersion(),
 		)
-		errCh <- srv.ListenAndServe()
+		errCh <- httpServer.ListenAndServe()
 	}()
 
 	select {
 	case <-ctx.Done():
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		return srv.Shutdown(shutdownCtx)
+		return httpServer.Shutdown(shutdownCtx)
 	case err := <-errCh:
 		if errors.Is(err, http.ErrServerClosed) {
 			return nil
 		}
 		return err
-	}
-}
-
-func parseLogLevel(level string) slog.Level {
-	switch strings.ToLower(level) {
-	case "debug":
-		return slog.LevelDebug
-	case "warn":
-		return slog.LevelWarn
-	case "error":
-		return slog.LevelError
-	default:
-		return slog.LevelInfo
 	}
 }

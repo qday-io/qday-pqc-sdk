@@ -1,8 +1,9 @@
-package main
+package config
 
 import (
 	"flag"
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 
@@ -18,6 +19,8 @@ const (
 	envLogLevel      = "PQC_LOG_LEVEL"
 )
 
+var defaultConfigPaths = []string{"config.yaml", "configs/config.yaml"}
+
 // Config is loaded from a YAML file, then overridden by environment variables.
 type Config struct {
 	HTTPAddr      string `yaml:"http_addr"`
@@ -27,7 +30,7 @@ type Config struct {
 	LogLevel      string `yaml:"log_level"`
 }
 
-func DefaultConfig() Config {
+func Default() Config {
 	return Config{
 		HTTPAddr:  ":8080",
 		Algorithm: "ML-DSA-65",
@@ -43,8 +46,8 @@ func ParseFlags(args []string) (configPath string, err error) {
 	return configPath, err
 }
 
-func LoadConfig(explicitPath string) (Config, string, error) {
-	cfg := DefaultConfig()
+func Load(explicitPath string) (Config, string, error) {
+	cfg := Default()
 	path := explicitPath
 	if path == "" {
 		path = os.Getenv(envConfig)
@@ -58,11 +61,10 @@ func LoadConfig(explicitPath string) (Config, string, error) {
 		}
 		usedPath = path
 	default:
-		if fileExists("config.yaml") {
-			if err := loadYAMLFile("config.yaml", &cfg); err != nil {
-				return Config{}, "", fmt.Errorf("load config.yaml: %w", err)
-			}
-			usedPath = "config.yaml"
+		if found, err := loadDefaultFile(&cfg); err != nil {
+			return Config{}, "", err
+		} else {
+			usedPath = found
 		}
 	}
 
@@ -71,6 +73,19 @@ func LoadConfig(explicitPath string) (Config, string, error) {
 		return Config{}, usedPath, err
 	}
 	return cfg, usedPath, nil
+}
+
+func loadDefaultFile(cfg *Config) (string, error) {
+	for _, path := range defaultConfigPaths {
+		if !fileExists(path) {
+			continue
+		}
+		if err := loadYAMLFile(path, cfg); err != nil {
+			return "", fmt.Errorf("load %s: %w", path, err)
+		}
+		return path, nil
+	}
+	return "", nil
 }
 
 func loadYAMLFile(path string, cfg *Config) error {
@@ -99,6 +114,19 @@ func applyEnv(cfg *Config) {
 	}
 }
 
+func (c Config) SlogLevel() slog.Level {
+	switch strings.ToLower(c.LogLevel) {
+	case "debug":
+		return slog.LevelDebug
+	case "warn":
+		return slog.LevelWarn
+	case "error":
+		return slog.LevelError
+	default:
+		return slog.LevelInfo
+	}
+}
+
 func (c Config) Validate() error {
 	if strings.TrimSpace(c.HTTPAddr) == "" {
 		return fmt.Errorf("http_addr is required")
@@ -115,4 +143,9 @@ func (c Config) Validate() error {
 		return fmt.Errorf("invalid log_level %q", c.LogLevel)
 	}
 	return nil
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
