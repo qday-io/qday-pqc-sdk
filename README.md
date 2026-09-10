@@ -27,7 +27,7 @@ All JSON endpoints require `Content-Type: application/json`. Unknown fields are 
 | --- | --- | --- |
 | UTF-8 | `message` | JSON string, valid UTF-8 |
 | RFC 4648 Base64 | `message_b64`, `signature_b64`, `public_key_b64` | Standard alphabet (`+` `/`), padded. Responses always use this. Requests also accept whitespace/newlines, missing padding, and URL-safe (`-` `_`). |
-| ASCII | `algorithm` | Algorithm name such as `ML-DSA-65` |
+| ASCII | `algorithm` | liboqs signature name; see [algorithm](#algorithm) |
 
 Provide **either** `message` (UTF-8) **or** `message_b64` (Base64 of raw bytes), not both.
 
@@ -179,6 +179,30 @@ Leave `secret_key_file` and `public_key_file` empty for an in-memory key pair (t
 | — | `PQC_CONFIG` | `./config.yaml` or `configs/config.yaml` if it exists |
 
 `secret_key_file` and `public_key_file` must be set together. If both files exist they are loaded; otherwise a new key pair is generated and written.
+
+### algorithm
+
+Must be a signature algorithm **enabled in liboqs 0.16**. Default is `ML-DSA-65`. Changing `algorithm` requires a new key pair (delete `data/*.key` or point at empty paths).
+
+**Recommended — ML-DSA (FIPS 204)**
+
+| Value | NIST category | Notes |
+| --- | --- | --- |
+| `ML-DSA-44` | 2 | Smaller keys/signatures |
+| `ML-DSA-65` | 3 | Default |
+| `ML-DSA-87` | 5 | Highest of the three |
+
+**Also enabled in this liboqs build** (exact names, case-sensitive):
+
+- Falcon: `Falcon-512`, `Falcon-1024`, `Falcon-padded-512`, `Falcon-padded-1024`
+- MAYO: `MAYO-1`, `MAYO-2`, `MAYO-3`, `MAYO-5`
+- CROSS: `cross-rsdp-{128,192,256}-{balanced,fast,small}`, `cross-rsdpg-{128,192,256}-{balanced,fast,small}`
+- UOV: `OV-{Is,Ip,III,V}` and `-pkc` / `-pkc-skc` variants
+- SNOVA: `SNOVA_24_5_4`, `SNOVA_24_5_4_SHAKE`, `SNOVA_24_5_4_esk`, `SNOVA_24_5_4_SHAKE_esk`, `SNOVA_37_17_2`, `SNOVA_25_8_3`, `SNOVA_56_25_2`, `SNOVA_49_11_3`, `SNOVA_37_8_4`, `SNOVA_24_5_5`, `SNOVA_60_10_4`, `SNOVA_29_6_5`
+- MQOM: `mqom2_cat{1,3,5}_gf16_{fast,short}_r{3,5}`
+- SLH-DSA (FIPS 205): `SLH_DSA_PURE_SHA2_{128,192,256}{S,F}`, `SLH_DSA_PURE_SHAKE_{128,192,256}{S,F}`, plus many `SLH_DSA_*_PREHASH_*` names
+
+Verify with `GET /v1/info` after startup. An unknown name fails at keygen (`init signer`). Dilithium and SPHINCS+ names are **not** valid in liboqs 0.16.
 
 ## Local (macOS)
 

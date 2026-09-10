@@ -28,7 +28,15 @@ func TestSignTwiceStillVerifies(t *testing.T) {
 }
 
 func TestSignVerify(t *testing.T) {
-	const alg = "ML-DSA-65"
+	testSignVerifyAlg(t, "ML-DSA-65")
+}
+
+func TestSignVerifyFalcon512(t *testing.T) {
+	testSignVerifyAlg(t, "Falcon-512")
+}
+
+func testSignVerifyAlg(t *testing.T, alg string) {
+	t.Helper()
 	msg := []byte("pqc sign/verify test")
 
 	s, err := Generate(alg)

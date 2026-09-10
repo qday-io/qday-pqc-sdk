@@ -12,7 +12,16 @@ import (
 )
 
 func TestAPISignVerify(t *testing.T) {
-	s, err := signer.Generate("ML-DSA-65")
+	testAPISignVerify(t, "ML-DSA-65")
+}
+
+func TestAPISignVerifyFalcon512(t *testing.T) {
+	testAPISignVerify(t, "Falcon-512")
+}
+
+func testAPISignVerify(t *testing.T, alg string) {
+	t.Helper()
+	s, err := signer.Generate(alg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,6 +53,9 @@ func TestAPISignVerify(t *testing.T) {
 	}
 	if signed.SignatureB64 == "" || signed.PublicKeyB64 == "" {
 		t.Fatalf("empty sign response: %+v", signed)
+	}
+	if signed.Algorithm != alg {
+		t.Fatalf("algorithm = %q, want %q", signed.Algorithm, alg)
 	}
 
 	verifyBody, _ := json.Marshal(verifyRequest{
