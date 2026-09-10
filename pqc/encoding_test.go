@@ -1,14 +1,15 @@
-package server
+package pqc
 
 import (
 	"encoding/base64"
+	"errors"
 	"testing"
 )
 
 func TestEncodeDecodeBase64RoundTrip(t *testing.T) {
 	raw := []byte{0x00, 0x01, 0xff, 0x7e}
-	encoded := encodeBase64(raw)
-	got, err := decodeBase64("field", encoded)
+	encoded := EncodeBase64(raw)
+	got, err := DecodeBase64("field", encoded)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -25,7 +26,7 @@ func TestDecodeBase64AcceptsWrappedAndURLSafe(t *testing.T) {
 	rawStd := base64.RawStdEncoding.EncodeToString(raw)
 
 	for _, in := range []string{std, wrapped, url, rawStd} {
-		got, err := decodeBase64("signature_b64", in)
+		got, err := DecodeBase64("signature_b64", in)
 		if err != nil {
 			t.Fatalf("decode %q: %v", in, err)
 		}
@@ -36,38 +37,38 @@ func TestDecodeBase64AcceptsWrappedAndURLSafe(t *testing.T) {
 }
 
 func TestDecodeBase64RejectsInvalid(t *testing.T) {
-	if _, err := decodeBase64("signature_b64", "%%%"); err == nil {
+	if _, err := DecodeBase64("signature_b64", "%%%"); err == nil {
 		t.Fatal("expected error")
 	}
-	if _, err := decodeBase64("signature_b64", "   "); err == nil {
+	if _, err := DecodeBase64("signature_b64", "   "); err == nil {
 		t.Fatal("expected required error")
 	}
 }
 
 func TestDecodeUTF8Message(t *testing.T) {
-	got, err := decodeUTF8Message("hello pqc")
+	got, err := DecodeUTF8Message("hello pqc")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if string(got) != "hello pqc" {
 		t.Fatalf("got %q", got)
 	}
-	if _, err := decodeUTF8Message(""); err == nil {
+	if _, err := DecodeUTF8Message(""); err == nil {
 		t.Fatal("expected required error")
 	}
-	if _, err := decodeUTF8Message(string([]byte{0xff, 0xfe})); err == nil {
+	if _, err := DecodeUTF8Message(string([]byte{0xff, 0xfe})); err == nil {
 		t.Fatal("expected invalid UTF-8 error")
 	}
 }
 
 func TestDecodeMessageExclusive(t *testing.T) {
-	if _, err := decodeMessage("hi", encodeBase64([]byte("hi"))); err == nil {
-		t.Fatal("expected exclusive error")
+	if _, err := DecodeMessage("hi", EncodeBase64([]byte("hi"))); !errors.Is(err, ErrMessageExclusive) {
+		t.Fatalf("got %v, want ErrMessageExclusive", err)
 	}
-	if _, err := decodeMessage("", ""); err == nil {
-		t.Fatal("expected required error")
+	if _, err := DecodeMessage("", ""); !errors.Is(err, ErrMessageRequired) {
+		t.Fatalf("got %v, want ErrMessageRequired", err)
 	}
-	got, err := decodeMessage("", encodeBase64([]byte{0x00}))
+	got, err := DecodeMessage("", EncodeBase64([]byte{0x00}))
 	if err != nil {
 		t.Fatal(err)
 	}

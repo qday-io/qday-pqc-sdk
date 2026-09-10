@@ -10,28 +10,13 @@ export MACOSX_DEPLOYMENT_TARGET
 export CGO_CFLAGS
 export CGO_LDFLAGS
 
-.PHONY: run test build tidy docker-build docker-run docker-up verify
-
-run:
-	go run ./cmd
+.PHONY: test example tidy
 
 test:
 	go test -v ./...
 
-build:
-	go build -o bin/qday-pqc-server ./cmd
+example:
+	go run ./examples/sign
 
 tidy:
 	go mod tidy
-
-docker-build:
-	docker build -t qday-pqc-server:local .
-
-docker-run:
-	docker run --rm -p 8080:8080 --name qday-pqc-server qday-pqc-server:local
-
-docker-up:
-	docker compose up -d
-
-verify:
-	./scripts/verify-api.sh
