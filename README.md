@@ -118,7 +118,7 @@ Install liboqs in the image (source build as above). Write a `liboqs-go.pc` whos
 go get github.com/qday-io/qday-pqc-sdk
 ```
 
-Requires Go 1.23+ and the liboqs setup above. Then:
+Requires Go 1.21+ and the liboqs setup above. Then:
 
 ```bash
 make test
