@@ -1,0 +1,39 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.21.x"
+
+      - name: Install liboqs 0.16.0
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build libssl-dev pkg-config
+          git clone --depth 1 --branch 0.16.0 https://github.com/open-quantum-safe/liboqs.git /tmp/liboqs
+          cmake -S /tmp/liboqs -B /tmp/liboqs/build -GNinja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=ON \
+            -DCMAKE_INSTALL_PREFIX=/usr/local
+          cmake --build /tmp/liboqs/build --parallel
+          sudo cmake --install /tmp/liboqs/build
+          sudo ldconfig
+
+      - name: Test
+        env:
+          CGO_ENABLED: "1"
+          LD_LIBRARY_PATH: /usr/local/lib
+        run: |
+          go mod download
+          export PKG_CONFIG_PATH="$(go env GOMODCACHE)/github.com/open-quantum-safe/liboqs-go@v0.16.0/.config"
+          go vet ./...
+          go test -count=1 ./...

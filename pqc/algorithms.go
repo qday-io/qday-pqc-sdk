@@ -1,6 +1,11 @@
 package pqc
 
-import "github.com/open-quantum-safe/liboqs-go/oqs"
+import (
+	"fmt"
+	"strings"
+
+	"github.com/open-quantum-safe/liboqs-go/oqs"
+)
 
 // Recommended ML-DSA (FIPS 204) algorithm names, matching liboqs.
 const (
@@ -30,7 +35,33 @@ func EnabledAlgorithms() []string {
 
 // IsAlgorithmEnabled reports whether alg is enabled in this liboqs build.
 func IsAlgorithmEnabled(alg string) bool {
+	alg = strings.TrimSpace(alg)
+	if alg == "" {
+		return false
+	}
 	return oqs.IsSigEnabled(alg)
+}
+
+func normalizeAlg(alg string) (string, error) {
+	alg = strings.TrimSpace(alg)
+	if alg == "" {
+		return "", ErrAlgorithmRequired
+	}
+	return alg, nil
+}
+
+// AlgorithmDetails returns parameters for alg without creating a key pair.
+func AlgorithmDetails(alg string) (Details, error) {
+	alg, err := normalizeAlg(alg)
+	if err != nil {
+		return Details{}, err
+	}
+	sig := oqs.Signature{}
+	defer sig.Clean()
+	if err := sig.Init(alg, nil); err != nil {
+		return Details{}, fmt.Errorf("init algorithm %q: %w", alg, err)
+	}
+	return detailsFrom(sig.Details()), nil
 }
 
 // Details describes a signature algorithm (liboqs-go field names).
@@ -43,6 +74,20 @@ type Details struct {
 	LengthPublicKey    int
 	LengthSecretKey    int
 	MaxLengthSignature int
+}
+
+func (d Details) String() string {
+	return fmt.Sprintf(
+		"Name: %s\nVersion: %s\nClaimed NIST level: %d\nIs EUF_CMA: %v\nContext string: %v\nLength public key (bytes): %d\nLength secret key (bytes): %d\nMax length signature (bytes): %d",
+		d.Name,
+		d.Version,
+		d.ClaimedNISTLevel,
+		d.IsEUFCMA,
+		d.SigWithCtxSupport,
+		d.LengthPublicKey,
+		d.LengthSecretKey,
+		d.MaxLengthSignature,
+	)
 }
 
 func detailsFrom(d oqs.SignatureDetails) Details {

@@ -2,6 +2,8 @@ package pqc
 
 import (
 	"bytes"
+	"errors"
+	"sync"
 	"testing"
 )
 
@@ -125,11 +127,134 @@ func TestNewRejectsWrongKeyLength(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(s.Clean)
-	if _, err := New(s.Algorithm(), s.SecretKey()[:1], s.PublicKey()); err == nil {
-		t.Fatal("expected error for truncated secret key")
+	if _, err := New(s.Algorithm(), s.SecretKey()[:1], s.PublicKey()); !errors.Is(err, ErrInvalidKeyLength) {
+		t.Fatalf("secret key: got %v, want ErrInvalidKeyLength", err)
 	}
-	if _, err := New(s.Algorithm(), s.SecretKey(), s.PublicKey()[:1]); err == nil {
-		t.Fatal("expected error for truncated public key")
+	if _, err := New(s.Algorithm(), s.SecretKey(), s.PublicKey()[:1]); !errors.Is(err, ErrInvalidKeyLength) {
+		t.Fatalf("public key: got %v, want ErrInvalidKeyLength", err)
+	}
+}
+
+func TestGenerateRequiresAlgorithm(t *testing.T) {
+	if _, err := Generate(""); !errors.Is(err, ErrAlgorithmRequired) {
+		t.Fatalf("got %v, want ErrAlgorithmRequired", err)
+	}
+	if _, err := Generate("   "); !errors.Is(err, ErrAlgorithmRequired) {
+		t.Fatalf("got %v, want ErrAlgorithmRequired", err)
+	}
+}
+
+func TestGenerateUnknownAlgorithm(t *testing.T) {
+	if _, err := Generate("not-a-real-algorithm"); err == nil {
+		t.Fatal("expected error for unknown algorithm")
+	}
+}
+
+func TestSignAfterClean(t *testing.T) {
+	s, err := Generate(AlgMLDSA65)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Clean()
+	if _, err := s.Sign([]byte("x")); !errors.Is(err, ErrSignerCleaned) {
+		t.Fatalf("got %v, want ErrSignerCleaned", err)
+	}
+}
+
+func TestSignConcurrent(t *testing.T) {
+	s, err := Generate(AlgMLDSA65)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(s.Clean)
+
+	const n = 8
+	var wg sync.WaitGroup
+	errCh := make(chan error, n)
+	wg.Add(n)
+	for i := 0; i < n; i++ {
+		go func(i int) {
+			defer wg.Done()
+			msg := []byte{byte(i)}
+			sig, err := s.Sign(msg)
+			if err != nil {
+				errCh <- err
+				return
+			}
+			ok, err := Verify(s.Algorithm(), msg, sig, s.PublicKey())
+			if err != nil {
+				errCh <- err
+				return
+			}
+			if !ok {
+				errCh <- errors.New("signature did not verify")
+			}
+		}(i)
+	}
+	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		t.Fatal(err)
+	}
+}
+
+func TestSignVerifyWithContext(t *testing.T) {
+	s, err := Generate(AlgMLDSA65)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(s.Clean)
+	if !s.Details().SigWithCtxSupport {
+		t.Fatal("ML-DSA-65 should support a context string")
+	}
+
+	msg := []byte("context message")
+	ctx := []byte("qday-pqc-sdk")
+	sig, err := s.SignWithContext(msg, ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ok, err := VerifyWithContext(s.Algorithm(), msg, sig, ctx, s.PublicKey())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Fatal("expected context signature to verify")
+	}
+
+	ok, err = VerifyWithContext(s.Algorithm(), msg, sig, []byte("other"), s.PublicKey())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok {
+		t.Fatal("expected wrong context to fail verification")
+	}
+
+	v, err := NewVerifier(s.Algorithm(), s.PublicKey())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ok, err = v.VerifyWithContext(msg, sig, ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Fatal("expected Verifier context check to succeed")
+	}
+}
+
+func TestSignWithContextUnsupported(t *testing.T) {
+	s, err := Generate(AlgFalcon512)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(s.Clean)
+	if s.Details().SigWithCtxSupport {
+		t.Skip("this Falcon-512 build supports context strings")
+	}
+	if _, err := s.SignWithContext([]byte("x"), []byte("ctx")); !errors.Is(err, ErrContextUnsupported) {
+		t.Fatalf("got %v, want ErrContextUnsupported", err)
 	}
 }
 
@@ -141,7 +266,21 @@ func TestEnabledAlgorithms(t *testing.T) {
 	if !IsAlgorithmEnabled(AlgMLDSA65) {
 		t.Fatal("ML-DSA-65 should be enabled")
 	}
+	if IsAlgorithmEnabled("") {
+		t.Fatal("empty algorithm should not be enabled")
+	}
 	if Version() == "" {
 		t.Fatal("expected liboqs version")
+	}
+
+	d, err := AlgorithmDetails(AlgMLDSA65)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Name != AlgMLDSA65 || d.LengthPublicKey == 0 || d.LengthSecretKey == 0 {
+		t.Fatalf("unexpected details: %+v", d)
+	}
+	if _, err := AlgorithmDetails(""); !errors.Is(err, ErrAlgorithmRequired) {
+		t.Fatalf("got %v, want ErrAlgorithmRequired", err)
 	}
 }

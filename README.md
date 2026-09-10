@@ -3,8 +3,9 @@
 Go SDK for post-quantum **sign** and **verify**. It does not implement the algorithms itself: every `Generate` / `Sign` / `Verify` call goes through [liboqs](https://github.com/open-quantum-safe/liboqs) (C) via [liboqs-go](https://github.com/open-quantum-safe/liboqs-go) v0.16.0 (ML-DSA / FIPS 204).
 
 ```
-pqc/            keygen, sign, verify, encodings
-examples/sign/  local sign/verify sample
+pqc/              keygen, sign, verify, encodings
+examples/sign/    generate keys and sign
+examples/verify/  verify with a public key only
 ```
 
 Any machine or container that **builds or runs** code importing this module must have a matching liboqs shared library. Pure-Go `go get` is not enough.
@@ -104,6 +105,8 @@ Libs: -L${prefix}/lib -loqs -L${prefix}/opt/openssl@3/lib -lcrypto
 EOF
 export PKG_CONFIG_PATH="$HOME/.local/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
 export CGO_ENABLED=1
+# If link fails with a macOS version mismatch against the Homebrew bottle:
+# export MACOSX_DEPLOYMENT_TARGET=26.0
 ```
 
 On Intel Homebrew, use `prefix=/usr/local`. After changing a `.pc` file, run `go clean -cache` so CGO picks it up.
@@ -121,6 +124,7 @@ go get github.com/qday-io/qday-pqc-sdk
 Requires Go 1.21+ and the liboqs setup above. Then:
 
 ```bash
+make vet
 make test
 make example
 ```
@@ -158,15 +162,18 @@ func main() {
 }
 ```
 
-Rebuild a signer from existing key bytes with `pqc.New(alg, secretKey, publicKey)`. Verify against a public key only with `pqc.NewVerifier`.
+Rebuild a signer from existing key bytes with `pqc.New(alg, secretKey, publicKey)`. Verify against a public key only with `pqc.NewVerifier`. ML-DSA context strings use `SignWithContext` / `VerifyWithContext`. Call `signer.Clean()` when finished so the secret key is wiped.
 
 | API | Description |
 | --- | --- |
 | `pqc.Generate` | New key pair (liboqs keygen) |
 | `pqc.New` | Reconstruct from secret and public key bytes |
 | `(*Signer).Sign` | Detached signature (liboqs sign) |
+| `(*Signer).SignWithContext` | Detached signature with a context string |
 | `(*Signer).Clean` | Zero the in-memory secret key |
 | `pqc.Verify` / `pqc.NewVerifier` | Verify a signature (liboqs verify) |
+| `pqc.VerifyWithContext` | Verify with the same context string used at sign time |
+| `pqc.AlgorithmDetails` | Key and signature sizes for an algorithm, no key pair |
 | `pqc.Version` | Linked liboqs version |
 | `pqc.EnabledAlgorithms` | Signature names enabled in this liboqs build |
 | `pqc.EncodeBase64` / `DecodeBase64` | RFC 4648 encodings for keys and signatures |
