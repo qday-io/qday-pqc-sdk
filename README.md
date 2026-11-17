@@ -3,9 +3,10 @@
 Go SDK for post-quantum **sign** and **verify**. It does not implement the algorithms itself: every `Generate` / `Sign` / `Verify` call goes through [liboqs](https://github.com/open-quantum-safe/liboqs) (C) via [liboqs-go](https://github.com/open-quantum-safe/liboqs-go) v0.16.0 (ML-DSA / FIPS 204).
 
 ```
-pqc/              keygen, sign, verify, encodings
-examples/sign/    generate keys and sign
-examples/verify/  verify with a public key only
+pqc/                 keygen, sign, verify, mnemonic, encodings
+examples/sign/       generate keys and sign
+examples/verify/     verify with a public key only
+examples/mnemonic/   BIP-39 mnemonic to key pair
 ```
 
 Any machine or container that **builds or runs** code importing this module must have a matching liboqs shared library. Pure-Go `go get` is not enough.
@@ -162,11 +163,23 @@ func main() {
 }
 ```
 
+From a BIP-39 mnemonic (optional passphrase; `""` if unused):
+
+```go
+mnemonic, err := pqc.NewMnemonic(24)
+signer, err := pqc.GenerateFromMnemonic(pqc.AlgMLDSA65, mnemonic, "")
+```
+
+The same mnemonic, passphrase, and algorithm reproduce the same key pair on the same liboqs version. `pqc.ValidateMnemonic` checks a phrase before deriving.
+
 Rebuild a signer from existing key bytes with `pqc.New(alg, secretKey, publicKey)`. Verify against a public key only with `pqc.NewVerifier`. ML-DSA context strings use `SignWithContext` / `VerifyWithContext`. Call `signer.Clean()` when finished so the secret key is wiped.
 
 | API | Description |
 | --- | --- |
-| `pqc.Generate` | New key pair (liboqs keygen) |
+| `pqc.Generate` | New key pair (liboqs random keygen) |
+| `pqc.NewMnemonic` | New BIP-39 English mnemonic (12–24 words) |
+| `pqc.GenerateFromMnemonic` | Key pair from mnemonic + optional passphrase |
+| `pqc.ValidateMnemonic` | Check a BIP-39 phrase |
 | `pqc.New` | Reconstruct from secret and public key bytes |
 | `(*Signer).Sign` | Detached signature (liboqs sign) |
 | `(*Signer).SignWithContext` | Detached signature with a context string |

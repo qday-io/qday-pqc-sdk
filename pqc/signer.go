@@ -3,9 +3,14 @@ package pqc
 import (
 	"bytes"
 	"fmt"
+	"sync"
 
 	"github.com/open-quantum-safe/liboqs-go/oqs"
 )
+
+// keygenMu serializes liboqs keygen so a mnemonic-derived RNG cannot race
+// with another Generate or GenerateFromMnemonic call.
+var keygenMu sync.Mutex
 
 // Signer holds a post-quantum key pair and can create detached signatures.
 // Sign is safe for concurrent use.
@@ -16,13 +21,18 @@ type Signer struct {
 	details   Details
 }
 
-// Generate creates a new key pair for alg.
+// Generate creates a new key pair for alg using liboqs system randomness.
 func Generate(alg string) (*Signer, error) {
 	alg, err := normalizeAlg(alg)
 	if err != nil {
 		return nil, err
 	}
+	keygenMu.Lock()
+	defer keygenMu.Unlock()
+	return generateLocked(alg)
+}
 
+func generateLocked(alg string) (*Signer, error) {
 	sig := oqs.Signature{}
 	defer sig.Clean()
 

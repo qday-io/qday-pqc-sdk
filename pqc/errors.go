@@ -12,4 +12,8 @@ var (
 	// ErrContextUnsupported is returned when a non-empty context string is used
 	// with an algorithm that does not support it.
 	ErrContextUnsupported = errors.New("algorithm does not support a context string")
+	// ErrInvalidMnemonic is returned when a BIP-39 mnemonic is malformed.
+	ErrInvalidMnemonic = errors.New("invalid mnemonic")
+	// ErrInvalidWordCount is returned when NewMnemonic is given an unsupported length.
+	ErrInvalidWordCount = errors.New("mnemonic word count must be 12, 15, 18, 21, or 24")
 )

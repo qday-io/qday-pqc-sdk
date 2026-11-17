@@ -23,6 +23,7 @@ vet:
 example:
 	go run ./examples/sign
 	go run ./examples/verify
+	go run ./examples/mnemonic
 
 tidy:
 	go mod tidy

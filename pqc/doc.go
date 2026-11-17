@@ -19,5 +19,10 @@
 //
 //	signer, err := pqc.New(alg, secretKey, publicKey)
 //
+// Derive a key pair from a BIP-39 mnemonic with [GenerateFromMnemonic]:
+//
+//	mnemonic, err := pqc.NewMnemonic(24)
+//	signer, err := pqc.GenerateFromMnemonic(pqc.AlgMLDSA65, mnemonic, "")
+//
 // [liboqs-go]: https://github.com/open-quantum-safe/liboqs-go
 package pqc
